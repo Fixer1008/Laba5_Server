@@ -11,6 +11,7 @@ namespace Laba5_SPOLKS_Server
         static void Main(string[] args)
         {
             Console.WriteLine("Hello world!");
+            Console.WriteLine("Ololo!");
         }
     }
 }
