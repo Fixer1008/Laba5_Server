@@ -15,7 +15,7 @@ namespace Laba5_SPOLKS_Server
             Console.WriteLine("Waiting for file receiving...");
 
             FileReceiver fileReceiver = new FileReceiver();
-            var result = fileReceiver.ReceiveFrom();
+            var result = fileReceiver.Receive();
 
             if (result == -1)
             {

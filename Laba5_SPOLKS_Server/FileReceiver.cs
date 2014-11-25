@@ -21,7 +21,7 @@ namespace Laba5_SPOLKS_Server
         private FileStream _fileStream;
         private IPEndPoint _remoteIpEndPoint = null;
 
-        private FileDetails _fileDetails;
+        public FileDetails FileDetails { get; set; }
 
         public FileReceiver()
         {
@@ -29,12 +29,18 @@ namespace Laba5_SPOLKS_Server
             _udpFileSender = new UdpFileClient();
         }
 
-        public int ReceiveFrom()
+        void InitializeUdpClients()
         {
+            _udpFileSender.Client.SendTimeout = _udpFileReceiver.Client.ReceiveTimeout = 10000;
+        }
+
+        public int Receive()
+        {
+            InitializeUdpClients();
             ReceiveFileDetails();
 
-            Console.WriteLine(_fileDetails.FileName);
-            Console.WriteLine(_fileDetails.FileLength);
+            Console.WriteLine(FileDetails.FileName);
+            Console.WriteLine(FileDetails.FileLength);
 
             ReceiveFileData();
 
@@ -54,7 +60,7 @@ namespace Laba5_SPOLKS_Server
                 memoryStream.Write(receivedFileInfo, 0, receivedFileInfo.Length);
                 memoryStream.Position = 0;
 
-                _fileDetails = (FileDetails)serializer.Deserialize(memoryStream);
+                FileDetails = (FileDetails)serializer.Deserialize(memoryStream);
                 return 0;
             }
             catch (Exception e)
@@ -76,15 +82,16 @@ namespace Laba5_SPOLKS_Server
 
             try
             {
-                if (_fileDetails.FileLength > 0)
+                if (FileDetails.FileLength > 0)
                 {
-                    _fileStream = new FileStream(_fileDetails.FileName, FileMode.Append, FileAccess.Write);
+                    _fileStream = new FileStream(FileDetails.FileName, FileMode.Append, FileAccess.Write);
 
                     IPAddress clientIpAddress = IPAddress.Parse(ClientIp);
                     IPEndPoint clientEndPoint = new IPEndPoint(clientIpAddress, 5000);
+
                     _udpFileSender.Connect(clientEndPoint);
 
-                    for (_fileStream.Position = 0; _fileStream.Position < _fileDetails.FileLength; )
+                    for (_fileStream.Position = 0; _fileStream.Position < FileDetails.FileLength; )
                     {
                         var fileDataArray = _udpFileReceiver.Receive(ref _remoteIpEndPoint);
 
