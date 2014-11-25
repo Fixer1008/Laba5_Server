@@ -11,12 +11,14 @@ namespace Laba5_SPOLKS_Server
 {
     public class FileReceiver
     {
+        private const int Size = 8192;
+        private const string SyncMessage = "SYNC";
+        private const string ClientIp = "192.168.0.104";
+
         private readonly UdpFileClient _udpFileReceiver;
         private readonly UdpFileClient _udpFileSender;
 
         private FileStream _fileStream;
-        private IPAddress _localIpAddress;
-        private IPEndPoint _localIpEndPoint;
         private IPEndPoint _remoteIpEndPoint = null;
 
         private FileDetails _fileDetails;
@@ -70,16 +72,29 @@ namespace Laba5_SPOLKS_Server
 
         private int ReceiveFileData()
         {
+            int filePointer = 0;
+
             try
             {
-                var fileDataArray = _udpFileReceiver.Receive(ref _remoteIpEndPoint);
-
-                if (fileDataArray.Length != 0)
+                if (_fileDetails.FileLength > 0)
                 {
-                    _fileStream = new FileStream(_fileDetails.FileName, FileMode.Create, FileAccess.Write);
-                    _fileStream.Write(fileDataArray, 0, fileDataArray.Length);
+                    _fileStream = new FileStream(_fileDetails.FileName, FileMode.Append, FileAccess.Write);
 
-                    Process.Start(_fileDetails.FileName);
+                    IPAddress clientIpAddress = IPAddress.Parse(ClientIp);
+                    IPEndPoint clientEndPoint = new IPEndPoint(clientIpAddress, 5000);
+                    _udpFileSender.Connect(clientEndPoint);
+
+                    for (_fileStream.Position = 0; _fileStream.Position < _fileDetails.FileLength; )
+                    {
+                        var fileDataArray = _udpFileReceiver.Receive(ref _remoteIpEndPoint);
+
+                        filePointer += fileDataArray.Length;
+                        Console.WriteLine(filePointer);
+
+                        _fileStream.Write(fileDataArray, 0, fileDataArray.Length);
+
+                        var sendBytesAmount = _udpFileSender.Send(Encoding.UTF8.GetBytes(SyncMessage), SyncMessage.Length);
+                    }
                 }
             }
             catch (Exception e)
