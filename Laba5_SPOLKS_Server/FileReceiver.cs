@@ -12,11 +12,12 @@ namespace Laba5_SPOLKS_Server
     public class FileReceiver
     {
         private const int Size = 8192;
+        private const int LocalPort = 11000;
         private const string SyncMessage = "SYNC";
-        private const string ClientIp = "192.168.0.104";
 
         private readonly UdpFileClient _udpFileReceiver;
-        private readonly UdpFileClient _udpFileSender;
+
+        private int connectionFlag = 0;
 
         private FileStream _fileStream;
         private IPEndPoint _remoteIpEndPoint = null;
@@ -25,13 +26,12 @@ namespace Laba5_SPOLKS_Server
 
         public FileReceiver()
         {
-            _udpFileReceiver = new UdpFileClient(11000);
-            _udpFileSender = new UdpFileClient();
+            _udpFileReceiver = new UdpFileClient(LocalPort);
         }
 
         void InitializeUdpClients()
         {
-            _udpFileSender.Client.SendTimeout = _udpFileReceiver.Client.ReceiveTimeout = 10000;
+            _udpFileReceiver.Client.ReceiveTimeout = _udpFileReceiver.Client.SendTimeout = 10000;
         }
 
         public int Receive()
@@ -84,24 +84,58 @@ namespace Laba5_SPOLKS_Server
             {
                 if (FileDetails.FileLength > 0)
                 {
-                    _fileStream = new FileStream(FileDetails.FileName, FileMode.Append, FileAccess.Write);
+                    _udpFileReceiver.Connect(_remoteIpEndPoint);
 
-                    IPAddress clientIpAddress = IPAddress.Parse(ClientIp);
-                    IPEndPoint clientEndPoint = new IPEndPoint(clientIpAddress, 5000);
-
-                    _udpFileSender.Connect(clientEndPoint);
-
-                    for (_fileStream.Position = 0; _fileStream.Position < FileDetails.FileLength; )
+                    if (_udpFileReceiver.ActiveRemoteHost)
                     {
-                        var fileDataArray = _udpFileReceiver.Receive(ref _remoteIpEndPoint);
+                        _fileStream = new FileStream(FileDetails.FileName, FileMode.Append, FileAccess.Write);
 
-                        filePointer += fileDataArray.Length;
-                        Console.WriteLine(filePointer);
+                        for (_fileStream.Position = 0; _fileStream.Position < FileDetails.FileLength; )
+                        {
+                            try
+                            {
+                                var fileDataArray = _udpFileReceiver.Receive(ref _remoteIpEndPoint);
 
-                        _fileStream.Write(fileDataArray, 0, fileDataArray.Length);
+                                filePointer += fileDataArray.Length;
+                                Console.WriteLine(filePointer);
 
-                        var sendBytesAmount = _udpFileSender.Send(Encoding.UTF8.GetBytes(SyncMessage), SyncMessage.Length);
+                                _fileStream.Write(fileDataArray, 0, fileDataArray.Length);
+
+                                var sendBytesAmount = _udpFileReceiver.Send(Encoding.UTF8.GetBytes(SyncMessage), SyncMessage.Length);
+                            }
+                            catch (SocketException e)
+                            {
+                                if (e.SocketErrorCode == SocketError.TimedOut && connectionFlag < 3)
+                                {
+                                    _udpFileReceiver.Connect(_remoteIpEndPoint);
+
+                                    if (_udpFileReceiver.ActiveRemoteHost)
+                                    {
+                                        connectionFlag = 0;
+                                    }
+                                    else
+                                    {
+                                        connectionFlag++;
+                                    }
+
+                                    continue;
+                                }
+                                else
+                                {
+                                    _udpFileReceiver.Close();
+                                    _fileStream.Close();
+                                    _fileStream.Dispose();
+                                    return -1;
+                                }
+                            }
+                        }
                     }
+                    else
+                    {
+                        _udpFileReceiver.Close();
+                        return -1;
+                    }
+
                 }
             }
             catch (Exception e)
